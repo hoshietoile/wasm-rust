@@ -5,17 +5,24 @@ import { mat4 } from 'gl-matrix';
 
 const vsSource = `
   attribute vec4 aVertexPosition;
+  attribute vec4 aVertexColor;
+
   uniform mat4 uModelViewMatrix;
   uniform mat4 uProjectionMatrix;
+
+  varying lowp vec4 vColor;
   
-  void main() {
+  void main(void) {
     gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+    vColor = aVertexColor;
   }
 `;
 
 const fsSource = `
-  void main() {
-    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+  varying lowp vec4 vColor;
+
+  void main(void) {
+    gl_FragColor = vColor;
   }
 `;
 
@@ -64,17 +71,33 @@ function App() {
     ];
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // colors
+    // 各頂点に対応する色情報を配列として保持
+    // 色情報を格納するWebGLバッファを割り当てる
+    const colors = [
+      1.0, 1.0, 1.0, 1.0,
+      1.0, 0.0, 0.0, 1.0,
+      0.0, 1.0, 0.0, 1.0,
+      0.0, 0.0, 1.0, 1.0,
+    ];
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
     return {
       position: positionBuffer,
+      color: colorBuffer,
     };
   }
 
-  const drawScene = (gl: WebGLRenderingContext, buffers: any) => {
+  const drawScene = (gl: WebGLRenderingContext, buffers: { [key: string]: WebGLBuffer | null }) => {
     const shaderProgram = initShaderProgram(gl, vsSource, fsSource)! as WebGLProgram;
     const programInfo = {
       program: shaderProgram,
       attribLocations: {
         vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+        vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
       },
       uniformLocations: {
         projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
@@ -82,7 +105,7 @@ function App() {
       },
     };
 
-    gl.clearColor(0.3, 0.0, 0.0, 1.0);
+    gl.clearColor(0.7, 0.8, 0.7, 0.8);
     gl.clearDepth(1.0);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -102,13 +125,15 @@ function App() {
       zFar,
     );
 
+    // 図形の描画位置を指定
     const modelViewMatrix = mat4.create();
     mat4.translate(
-      modelViewMatrix,
-      modelViewMatrix,
-      [-0.0, 0.0, -6.0],
+      modelViewMatrix, // 図形描画開始位置
+      modelViewMatrix, // 
+      [-0.0, 0.0, -6.0], // 移動距離
     );
 
+    // WebGLにどのようにポジションバッファから`vertexPosition`プロパティに値を割り当てるかを通知
     {
       const numComponents = 2;
       const type = gl.FLOAT;
@@ -130,8 +155,30 @@ function App() {
       );
     }
 
+    // WebGLにどのように色のバッファから`vertexColor`プロパティに値を割り当てるかを通知
+    {
+      const numComponents = 4;
+      const type = gl.FLOAT;
+      const normalize = false;
+      const stride = 0;
+      const offset = 0;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+      gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexColor,
+        numComponents,
+        type,
+        normalize,
+        stride,
+        offset,
+      );
+      gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexColor,
+      );
+    }
+
     gl.useProgram(programInfo.program);
 
+    // set the shader uniforms.
     gl.uniformMatrix4fv(
       programInfo.uniformLocations.projectionMatrix,
       false,
