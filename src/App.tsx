@@ -1,6 +1,6 @@
 import './App.css'
 import init, * as wasm from './../wasm/pkg';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { mat4 } from 'gl-matrix';
 
 const vsSource = `
@@ -27,6 +27,9 @@ const fsSource = `
 `;
 
 function App() {
+  const squareRotation = useRef<number>(0.0);
+  const then = useRef<number>(0.0);
+
   const wasmAlert = async () => {
     await init();
     wasm.greet()
@@ -91,7 +94,11 @@ function App() {
     };
   }
 
-  const drawScene = (gl: WebGLRenderingContext, buffers: { [key: string]: WebGLBuffer | null }) => {
+  const drawScene = (
+    gl: WebGLRenderingContext,
+    buffers: { [key: string]: WebGLBuffer | null },
+    deltaTime: number
+  ) => {
     const shaderProgram = initShaderProgram(gl, vsSource, fsSource)! as WebGLProgram;
     const programInfo = {
       program: shaderProgram,
@@ -131,6 +138,12 @@ function App() {
       modelViewMatrix, // 図形描画開始位置
       modelViewMatrix, // 
       [-0.0, 0.0, -6.0], // 移動距離
+    );
+    mat4.rotate(
+      modelViewMatrix,
+      modelViewMatrix,
+      squareRotation.current,
+      [0, 0, 1],
     );
 
     // WebGLにどのようにポジションバッファから`vertexPosition`プロパティに値を割り当てるかを通知
@@ -195,6 +208,7 @@ function App() {
       const vertexCount = 4;
       gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
     }
+    squareRotation.current += deltaTime
   }
 
   useEffect(() => {
@@ -202,7 +216,15 @@ function App() {
     const gl = canvas.getContext('webgl')
     if (gl) {
       const buffers = initBuffers(gl);
-      drawScene(gl, buffers)
+
+      const render = (now: number) => {
+        now *= 0.0005;
+        const deltaTime = now - then.current;
+        then.current = now;
+        drawScene(gl, buffers, deltaTime);
+        requestAnimationFrame(render);
+      }
+      requestAnimationFrame(render);
     }
   }, [])
 
